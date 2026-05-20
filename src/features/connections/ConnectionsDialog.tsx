@@ -33,14 +33,14 @@ export function ConnectionsDialog() {
   }, [connectionsOpen, load]);
 
   function pick(c: Connection) {
-    setEditing({ ...c });
+    setEditing({ ...c, color: c.color ?? "#6aa6ff" });
   }
 
   async function save() {
     if (!editing.name.trim()) return toast.error("Name required");
     const saved = await upsert(editing);
     toast.success(`Saved ${saved.name}`);
-    setEditing({ ...saved });
+    setEditing({ ...saved, color: saved.color ?? "#6aa6ff" });
   }
 
   async function test() {
