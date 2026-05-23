@@ -4,6 +4,7 @@ Phase 3 upgrades DBeam from a browser app + localhost bridge into a **Tauri-firs
 
 ## What changed
 
+- **npm is now the package manager of record** for this repository
 - **No localhost Express bridge** in the main app flow
 - **Native IPC** via Tauri commands/events
 - **Local connection metadata storage** through the desktop store abstraction
@@ -64,8 +65,17 @@ The frontend migration was validated with:
 
 ```sh
 npm install
+npm run build
+npm run lint
+npm run test
 npm run typecheck
 ```
+
+## Package manager and runtime
+
+- `package-lock.json` is the source-of-truth lockfile.
+- Bun-specific artifacts such as `bun.lock` and `bunfig.toml` have been removed.
+- The root project and legacy `server/` package both target standard npm + Node.js LTS workflows.
 
 ## Tooling status on this machine
 

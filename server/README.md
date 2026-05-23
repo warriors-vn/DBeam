@@ -21,6 +21,8 @@ npm install
 npm run dev
 ```
 
+This package is npm/Node.js compatible and no longer relies on any Bun tooling.
+
 The bridge starts on `http://localhost:7717` by default. Open the Tabletop UI,
 click the bridge status pill in the title bar, and verify it shows "Online".
 

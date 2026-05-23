@@ -3,6 +3,11 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "packageManager": "npm@11.12.1",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "vite dev",
     "dev:desktop": "tauri dev",
@@ -10,6 +15,7 @@
     "build:desktop": "tauri build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
