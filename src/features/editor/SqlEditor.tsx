@@ -9,7 +9,6 @@ import { uid } from "@/lib/id";
 import { useConnections } from "@/stores/connections";
 import { ResultsTable } from "@/features/results/ResultsTable";
 import { bridge } from "@/services/bridge";
-import { useUI } from "@/stores/ui";
 
 function formatSql(sql: string) {
   return sql
