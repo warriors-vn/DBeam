@@ -1,10 +1,14 @@
+pub mod ai;
 pub mod commands;
 pub mod db;
 pub mod models;
+pub mod plugins;
 pub mod security;
 pub mod services;
 pub mod state;
+pub mod telemetry;
 pub mod utils;
+pub mod workspace;
 
 use tauri::Manager;
 

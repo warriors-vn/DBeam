@@ -114,3 +114,14 @@ export async function saveActiveConnectionId(value: string | null): Promise<void
   await store.set(KEYS.activeConnectionId, value);
   await store.save();
 }
+
+export async function loadPersistedValue<T>(key: string, fallback: T): Promise<T> {
+  const store = await getStore();
+  return (await store.get<T>(key)) ?? fallback;
+}
+
+export async function savePersistedValue<T>(key: string, value: T): Promise<void> {
+  const store = await getStore();
+  await store.set(key, value);
+  await store.save();
+}

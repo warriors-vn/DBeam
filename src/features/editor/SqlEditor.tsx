@@ -2,11 +2,12 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import { useUI } from "@/stores/ui";
 import { useTabs, type QueryTab } from "@/stores/tabs";
 import { useCallback, useRef } from "react";
-import { Play, Wand2, History, Loader2 } from "lucide-react";
+import { Bot, BookText, GitBranchPlus, Play, Wand2, History, Loader2 } from "lucide-react";
 import { useConnections } from "@/stores/connections";
 import { ResultsTable } from "@/features/results/ResultsTable";
 import { bridge, isTauriDesktop, notifyDesktop } from "@/services/bridge";
 import { toast } from "sonner";
+import { useWorkspace } from "@/stores/workspace";
 
 function formatSql(sql: string) {
   return (
@@ -26,6 +27,11 @@ export function SqlEditor({ tab }: { tab: QueryTab }) {
   const update = useTabs((s) => s.update);
   const activeConn = useConnections((s) => s.activeId);
   const activePool = useConnections((s) => s.activePoolId);
+  const openPanel = useWorkspace((state) => state.openPanel);
+  const appendNotebookBlock = useWorkspace((state) => state.appendNotebookBlock);
+  const addMigrationDraft = useWorkspace((state) => state.addMigrationDraft);
+  const addActivity = useWorkspace((state) => state.addActivity);
+  const recordQueryMetric = useWorkspace((state) => state.recordQueryMetric);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
   const run = useCallback(async () => {
@@ -38,6 +44,21 @@ export function SqlEditor({ tab }: { tab: QueryTab }) {
 
       const result = await bridge.execute(connectionId, tab.sql, tab.id);
       update(tab.id, { running: false, result, dirty: false });
+      recordQueryMetric({
+        connectionId: activeConn,
+        tabId: tab.id,
+        sql: tab.sql,
+        durationMs: result.durationMs,
+        rowCount: result.rowCount,
+        kind: "query",
+      });
+      addActivity({
+        kind: "query",
+        title: `Ran ${tab.title}`,
+        detail: `${result.rowCount.toLocaleString()} rows · ${result.durationMs}ms`,
+        tabId: tab.id,
+        connectionId: activeConn,
+      });
       if (result.durationMs > 1200) {
         void notifyDesktop(
           "Query completed",
@@ -50,7 +71,7 @@ export function SqlEditor({ tab }: { tab: QueryTab }) {
       toast.error(message);
       void notifyDesktop("Query failed", message);
     }
-  }, [activeConn, activePool, tab.id, tab.sql, update]);
+  }, [activeConn, activePool, addActivity, recordQueryMetric, tab.id, tab.sql, tab.title, update]);
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -87,8 +108,39 @@ export function SqlEditor({ tab }: { tab: QueryTab }) {
         <button
           className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
           title="History"
+          onClick={() => openPanel("telemetry")}
         >
           <History className="size-3.5" /> History
+        </button>
+        <button
+          onClick={() => openPanel("ai")}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Bot className="size-3.5" /> Ask AI
+        </button>
+        <button
+          onClick={() => {
+            appendNotebookBlock({ type: "sql", content: tab.sql });
+            openPanel("notebook");
+          }}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <BookText className="size-3.5" /> Notebook
+        </button>
+        <button
+          onClick={() => {
+            addMigrationDraft({
+              title: `${tab.title} migration`,
+              rationale: "Captured directly from the SQL editor.",
+              upSql: tab.sql,
+              downSql: "-- TODO: add rollback SQL",
+              status: "draft",
+            });
+            openPanel("migrations");
+          }}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <GitBranchPlus className="size-3.5" /> Migration
         </button>
         <div className="ml-auto text-[11px] text-muted-foreground">
           {tab.result

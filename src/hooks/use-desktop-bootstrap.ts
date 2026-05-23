@@ -3,12 +3,14 @@ import { toast } from "sonner";
 import { useConnections } from "@/stores/connections";
 import { useTabs } from "@/stores/tabs";
 import { useUI } from "@/stores/ui";
+import { useWorkspace } from "@/stores/workspace";
 
 export function useDesktopBootstrap() {
   const [ready, setReady] = useState(false);
   const didInit = useRef(false);
   const hydrateUI = useUI((state) => state.hydrate);
   const hydrateTabs = useTabs((state) => state.hydrate);
+  const hydrateWorkspace = useWorkspace((state) => state.hydrate);
   const newQueryTab = useTabs((state) => state.newQueryTab);
   const tabs = useTabs((state) => state.tabs);
   const hydrateSelection = useConnections((state) => state.hydrateSelection);
@@ -23,11 +25,11 @@ export function useDesktopBootstrap() {
     didInit.current = true;
 
     void (async () => {
-      await Promise.all([hydrateUI(), hydrateTabs(), hydrateSelection()]);
+      await Promise.all([hydrateUI(), hydrateTabs(), hydrateWorkspace(), hydrateSelection()]);
       await loadConnections();
       setReady(true);
     })();
-  }, [hydrateSelection, hydrateTabs, hydrateUI, loadConnections]);
+  }, [hydrateSelection, hydrateTabs, hydrateUI, hydrateWorkspace, loadConnections]);
 
   useEffect(() => {
     if (!ready || tabs.length > 0) return;

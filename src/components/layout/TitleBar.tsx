@@ -1,14 +1,27 @@
 import { useUI } from "@/stores/ui";
 import { useConnections } from "@/stores/connections";
-import { Database, Minus, PanelLeft, Plug, Search, Settings as Cog, Square, X } from "lucide-react";
+import {
+  Bot,
+  Database,
+  Minus,
+  PanelLeft,
+  Plug,
+  Search,
+  Settings as Cog,
+  Square,
+  X,
+} from "lucide-react";
 import { BridgeStatus } from "./BridgeStatus";
 import { closeWindow, minimizeWindow, toggleMaximizeWindow } from "@/services/window";
 import { isTauriDesktop } from "@/services/bridge";
+import { useWorkspace } from "@/stores/workspace";
 
 export function TitleBar() {
   const { toggleSidebar, setPalette, setSettings, setConnections } = useUI();
   const { activeId, list } = useConnections();
   const active = list.find((c) => c.id === activeId);
+  const workspace = useWorkspace((state) => state.activeWorkspace());
+  const openPanel = useWorkspace((state) => state.openPanel);
   const isDesktop = isTauriDesktop();
 
   return (
@@ -52,6 +65,10 @@ export function TitleBar() {
         <Database className="size-3.5 text-primary" />
         <span className="text-foreground">DBeam</span>
         <span className="text-muted-foreground">/</span>
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+          {workspace?.name ?? "Workspace"}
+        </span>
+        <span className="text-muted-foreground">/</span>
         <button
           onClick={() => setConnections(true)}
           className="rounded-md px-2 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -77,6 +94,14 @@ export function TitleBar() {
       <div className="flex-1" />
 
       <BridgeStatus />
+
+      <button
+        onClick={() => openPanel("ai")}
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+        aria-label="Open AI copilot"
+      >
+        <Bot className="size-4" />
+      </button>
 
       <button
         onClick={() => setConnections(true)}

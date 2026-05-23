@@ -4,9 +4,23 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useUI } from "@/stores/ui";
 import { useConnections } from "@/stores/connections";
 import { useTabs } from "@/stores/tabs";
-import { Database, FileText, Moon, PanelTop, Plug, Settings, Sun, Table2 } from "lucide-react";
+import {
+  Bot,
+  BookText,
+  Database,
+  FileText,
+  GitBranchPlus,
+  Moon,
+  PanelTop,
+  Plug,
+  Settings,
+  Sparkles,
+  Sun,
+  Table2,
+} from "lucide-react";
 import { useExplorerCatalog } from "@/services/queries";
 import { openQueryWindow } from "@/services/window";
+import { useWorkspace } from "@/stores/workspace";
 
 export function CommandPalette() {
   const { paletteOpen, setPalette, setConnections, setSettings, theme, setTheme } = useUI();
@@ -14,9 +28,22 @@ export function CommandPalette() {
   const activePoolId = useConnections((s) => s.activePoolId);
   const { databases } = useExplorerCatalog(paletteOpen ? activePoolId : null);
   const tabs = useTabs((s) => s.tabs);
+  const activeId = useTabs((s) => s.activeId);
   const setActive = useTabs((s) => s.setActive);
   const newQuery = useTabs((s) => s.newQueryTab);
   const openTable = useTabs((s) => s.openTable);
+  const activeTab =
+    tabs.find(
+      (tab): tab is Extract<(typeof tabs)[number], { kind: "query" }> =>
+        tab.id === activeId && tab.kind === "query",
+    ) ?? null;
+  const openPanel = useWorkspace((state) => state.openPanel);
+  const createWorkspace = useWorkspace((state) => state.createWorkspace);
+  const switchWorkspace = useWorkspace((state) => state.switchWorkspace);
+  const workspaces = useWorkspace((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspace((state) => state.activeWorkspaceId);
+  const createNotebook = useWorkspace((state) => state.createNotebook);
+  const addMigrationDraft = useWorkspace((state) => state.addMigrationDraft);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -83,6 +110,40 @@ export function CommandPalette() {
                     }}
                   />
                   <PItem
+                    icon={<Bot className="size-3.5" />}
+                    label="Open AI copilot"
+                    onSelect={() => {
+                      openPanel("ai");
+                      setPalette(false);
+                    }}
+                  />
+                  <PItem
+                    icon={<BookText className="size-3.5" />}
+                    label="Create notebook"
+                    onSelect={() => {
+                      createNotebook();
+                      openPanel("notebook");
+                      setPalette(false);
+                    }}
+                  />
+                  <PItem
+                    icon={<GitBranchPlus className="size-3.5" />}
+                    label="Create migration from active SQL"
+                    onSelect={() => {
+                      addMigrationDraft({
+                        title: activeTab
+                          ? `${activeTab.title} migration`
+                          : "Command palette migration",
+                        rationale: "Created from the command center.",
+                        upSql: activeTab?.sql ?? "ALTER TABLE users ADD COLUMN notes TEXT NULL;",
+                        downSql: "-- TODO: add rollback SQL",
+                        status: "draft",
+                      });
+                      openPanel("migrations");
+                      setPalette(false);
+                    }}
+                  />
+                  <PItem
                     icon={<PanelTop className="size-3.5" />}
                     label="Open query in new window"
                     onSelect={() => {
@@ -120,6 +181,31 @@ export function CommandPalette() {
                         }}
                       />
                     ))}
+                  </Command.Group>
+                )}
+
+                {workspaces.length > 0 && (
+                  <Command.Group heading="Workspaces" className="palette-group">
+                    {workspaces.map((workspace) => (
+                      <PItem
+                        key={workspace.id}
+                        icon={<Sparkles className="size-3.5" />}
+                        label={workspace.name}
+                        meta={workspace.id === activeWorkspaceId ? "active" : workspace.description}
+                        onSelect={() => {
+                          switchWorkspace(workspace.id);
+                          setPalette(false);
+                        }}
+                      />
+                    ))}
+                    <PItem
+                      icon={<Sparkles className="size-3.5" />}
+                      label="Create workspace"
+                      onSelect={() => {
+                        createWorkspace();
+                        setPalette(false);
+                      }}
+                    />
                   </Command.Group>
                 )}
 

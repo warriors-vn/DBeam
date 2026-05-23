@@ -13,11 +13,18 @@ import { CommandPalette } from "@/features/palette/CommandPalette";
 import { Toaster } from "@/components/ui/sonner";
 import { Database, Plug, Sparkles } from "lucide-react";
 import { useDesktopBootstrap } from "@/hooks/use-desktop-bootstrap";
+import { WorkspaceDock } from "./WorkspaceDock";
+import { useWorkspace } from "@/stores/workspace";
 
 export function AppShell() {
   const ready = useDesktopBootstrap();
   const { tabs, activeId, close, newQueryTab, setActive } = useTabs();
   const { theme, setPalette, setConnections } = useUI();
+  const panelOpen = useWorkspace((state) => state.layout.panelOpen);
+  const activePanel = useWorkspace((state) => state.layout.activePanel);
+  const openPanel = useWorkspace((state) => state.openPanel);
+  const togglePanel = useWorkspace((state) => state.togglePanel);
+  const dockWidth = useWorkspace((state) => state.layout.dockWidth);
   const activeConnId = useConnections((s) => s.activeId);
   const connList = useConnections((s) => s.list);
   const activeConn = connList.find((c) => c.id === activeConnId);
@@ -51,11 +58,17 @@ export function AppShell() {
         const idx = tabs.findIndex((tab) => tab.id === activeId);
         const next = tabs[idx - 1] ?? tabs[tabs.length - 1];
         if (next) setActive(next.id);
+      } else if (mod && e.key === "/") {
+        e.preventDefault();
+        togglePanel();
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        openPanel("ai");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeId, close, newQueryTab, setActive, setPalette, tabs]);
+  }, [activeId, close, newQueryTab, openPanel, setActive, setPalette, tabs, togglePanel]);
 
   const active = tabs.find((t) => t.id === activeId);
 
@@ -93,6 +106,15 @@ export function AppShell() {
             )}
           </div>
         </main>
+        {panelOpen ? (
+          <div
+            className="min-w-0 border-l border-border/60"
+            style={{ width: dockWidth }}
+            data-panel={activePanel}
+          >
+            <WorkspaceDock />
+          </div>
+        ) : null}
       </div>
       <ConnectionsDialog />
       <SettingsDialog />

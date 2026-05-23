@@ -2,12 +2,13 @@ import { useEffect } from "react";
 import { useTabs, type TableTab } from "@/stores/tabs";
 import { ResultsTable } from "@/features/results/ResultsTable";
 import { useConnections } from "@/stores/connections";
-import { Columns3, Database, KeyRound, Link2, RefreshCw, Loader2 } from "lucide-react";
+import { Columns3, Database, KeyRound, Link2, Network, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { bridge, isTauriDesktop } from "@/services/bridge";
 import { useColumns } from "@/services/queries";
 import type { ColumnInfo } from "@/types/desktop";
+import { useWorkspace } from "@/stores/workspace";
 
 function quoteIdentifier(value: string) {
   return "`" + value.replace(/`/g, "``") + "`";
@@ -16,7 +17,11 @@ function quoteIdentifier(value: string) {
 export function TableView({ tab }: { tab: TableTab }) {
   const update = useTabs((s) => s.update);
   const activePoolId = useConnections((s) => s.activePoolId);
+  const activeConnId = useConnections((s) => s.activeId);
   const columnsQuery = useColumns(activePoolId, tab.database, tab.table);
+  const openPanel = useWorkspace((state) => state.openPanel);
+  const addActivity = useWorkspace((state) => state.addActivity);
+  const recordQueryMetric = useWorkspace((state) => state.recordQueryMetric);
   const [view, setView] = useState<"data" | "structure">("data");
 
   const load = async () => {
@@ -32,6 +37,21 @@ export function TableView({ tab }: { tab: TableTab }) {
       tab.id,
     );
     update(tab.id, { running: false, result });
+    recordQueryMetric({
+      connectionId: activeConnId,
+      tabId: tab.id,
+      sql: `SELECT * FROM ${tab.database}.${tab.table} LIMIT 500`,
+      durationMs: result.durationMs,
+      rowCount: result.rowCount,
+      kind: "table",
+    });
+    addActivity({
+      kind: "query",
+      title: `Loaded ${tab.table}`,
+      detail: `${result.rowCount.toLocaleString()} rows · ${result.durationMs}ms`,
+      tabId: tab.id,
+      connectionId: activeConnId,
+    });
   };
 
   useEffect(() => {
@@ -68,18 +88,26 @@ export function TableView({ tab }: { tab: TableTab }) {
           ))}
         </div>
         <div className="ml-auto">
-          <button
-            onClick={load}
-            disabled={tab.running}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            {tab.running ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
-            )}
-            Refresh
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => openPanel("erd")}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <Network className="size-3.5" /> ERD
+            </button>
+            <button
+              onClick={load}
+              disabled={tab.running}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              {tab.running ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
       <div className="min-h-0 flex-1">

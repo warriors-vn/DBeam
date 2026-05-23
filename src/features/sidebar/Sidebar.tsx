@@ -15,6 +15,7 @@ import { useConnections } from "@/stores/connections";
 import { useTabs } from "@/stores/tabs";
 import { cn } from "@/lib/utils";
 import { useExplorerCatalog } from "@/services/queries";
+import { useWorkspace } from "@/stores/workspace";
 
 export function Sidebar() {
   const { sidebarCollapsed, setConnections } = useUI();
@@ -22,6 +23,10 @@ export function Sidebar() {
   const active = list.find((c) => c.id === activeId);
   const [query, setQuery] = useState("");
   const { databases, isLoading } = useExplorerCatalog(activePoolId);
+  const workspaces = useWorkspace((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspace((state) => state.activeWorkspaceId);
+  const switchWorkspace = useWorkspace((state) => state.switchWorkspace);
+  const createWorkspace = useWorkspace((state) => state.createWorkspace);
   const [open, setOpen] = useState<Record<string, boolean>>({
     [databases[0]?.name ?? ""]: true,
   });
@@ -85,6 +90,31 @@ export function Sidebar() {
       </div>
 
       <div className="px-3 pt-3">
+        <div className="mb-3">
+          <div className="mb-2 flex items-center justify-between px-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+            <span>Workspaces</span>
+            <button onClick={() => createWorkspace()} className="hover:text-foreground">
+              <Plus className="size-3" />
+            </button>
+          </div>
+          <div className="space-y-1">
+            {workspaces.slice(0, 4).map((workspace) => (
+              <button
+                key={workspace.id}
+                onClick={() => switchWorkspace(workspace.id)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs",
+                  workspace.id === activeWorkspaceId
+                    ? "glass-soft text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <span className="size-2 rounded-full" style={{ background: workspace.color }} />
+                <span className="truncate">{workspace.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="glass-soft flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
           <Search className="size-3.5" />
           <input

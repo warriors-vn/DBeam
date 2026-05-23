@@ -102,6 +102,181 @@ export interface QueryHistoryEntry {
   ok: boolean;
 }
 
+export type WorkspacePanel = "ai" | "notebook" | "erd" | "snippets" | "migrations" | "telemetry";
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+  createdAt: number;
+  updatedAt: number;
+  lastOpenedAt: number;
+}
+
+export interface WorkspaceActivity {
+  id: string;
+  workspaceId: string;
+  kind: "query" | "ai" | "snippet" | "migration" | "notebook" | "workspace" | "diagram";
+  title: string;
+  detail?: string;
+  ts: number;
+  tabId?: string | null;
+  connectionId?: string | null;
+}
+
+export type AiProviderId = "mock-openai" | "openai" | "claude" | "ollama" | "local";
+
+export type AiActionKind = "insert-sql" | "create-snippet" | "create-migration" | "append-note";
+
+export interface AiAction {
+  id: string;
+  kind: AiActionKind;
+  label: string;
+  payload: string;
+  description?: string;
+}
+
+export interface AiMessage {
+  id: string;
+  role: "system" | "user" | "assistant";
+  content: string;
+  createdAt: number;
+  status?: "streaming" | "ready" | "error";
+  actions?: AiAction[];
+}
+
+export interface AiThread {
+  id: string;
+  workspaceId: string;
+  title: string;
+  providerId: AiProviderId;
+  connectionId?: string | null;
+  tabId?: string | null;
+  messages: AiMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AiContextSnapshot {
+  workspaceName: string;
+  connectionName?: string;
+  tabTitle?: string;
+  sql?: string;
+  schemaSummary?: string[];
+  resultPreview?: string;
+}
+
+export type NotebookBlockType = "heading" | "markdown" | "sql" | "result" | "callout";
+
+export interface NotebookBlock {
+  id: string;
+  type: NotebookBlockType;
+  content: string;
+  collapsed?: boolean;
+  queryResult?: QueryResult;
+  createdAt: number;
+}
+
+export interface NotebookDocument {
+  id: string;
+  workspaceId: string;
+  title: string;
+  blocks: NotebookBlock[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WorkspaceSnippet {
+  id: string;
+  workspaceId: string;
+  title: string;
+  description: string;
+  sql: string;
+  folder: string;
+  tags: string[];
+  variables: string[];
+  favorite: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MigrationDraft {
+  id: string;
+  workspaceId: string;
+  title: string;
+  rationale: string;
+  upSql: string;
+  downSql: string;
+  status: "draft" | "review" | "ready" | "applied";
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DiagramNode {
+  id: string;
+  label: string;
+  database: string;
+  kind: "table" | "view";
+  columns: ColumnInfo[];
+  position: { x: number; y: number };
+}
+
+export interface DiagramEdge {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface QueryTelemetryEntry {
+  id: string;
+  workspaceId: string;
+  connectionId?: string | null;
+  tabId?: string | null;
+  sql: string;
+  durationMs: number;
+  rowCount: number;
+  ts: number;
+  kind: "query" | "table";
+}
+
+export interface TelemetrySnapshot {
+  totalQueries: number;
+  slowQueries: number;
+  avgDurationMs: number;
+  totalRowsObserved: number;
+}
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  status: "ready" | "planned";
+  hooks: Array<"command" | "sidebar" | "editor" | "telemetry" | "ai">;
+}
+
+export interface WorkspaceLayoutState {
+  panelOpen: boolean;
+  activePanel: WorkspacePanel;
+  dockWidth: number;
+}
+
+export interface WorkspacePersistedState {
+  workspaces: WorkspaceSummary[];
+  activeWorkspaceId: string | null;
+  layout: WorkspaceLayoutState;
+  threads: AiThread[];
+  notebooks: NotebookDocument[];
+  snippets: WorkspaceSnippet[];
+  migrations: MigrationDraft[];
+  activities: WorkspaceActivity[];
+  telemetry: QueryTelemetryEntry[];
+  plugins: PluginManifest[];
+}
+
 export interface DesktopEvent<TPayload = unknown> {
   type: string;
   payload: TPayload;
