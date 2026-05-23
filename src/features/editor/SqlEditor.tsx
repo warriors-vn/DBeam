@@ -8,6 +8,8 @@ import { db } from "@/lib/db/dexie";
 import { uid } from "@/lib/id";
 import { useConnections } from "@/stores/connections";
 import { ResultsTable } from "@/features/results/ResultsTable";
+import { bridge } from "@/services/bridge";
+import { useUI } from "@/stores/ui";
 
 function formatSql(sql: string) {
   return sql
@@ -22,15 +24,20 @@ function formatSql(sql: string) {
 
 export function SqlEditor({ tab }: { tab: QueryTab }) {
   const { fontSize, minimap } = useUI();
+  const useBridge = useUI((s) => s.useBridge);
   const update = useTabs((s) => s.update);
   const activeConn = useConnections((s) => s.activeId);
+  const activePool = useConnections((s) => s.activePoolId);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
   const run = useCallback(async () => {
     update(tab.id, { running: true, error: undefined });
     const started = performance.now();
     try {
-      const result = await mockExecute(tab.sql);
+      const result =
+        useBridge && activePool
+          ? await bridge.execute(activePool, tab.sql, tab.id)
+          : await mockExecute(tab.sql);
       update(tab.id, { running: false, result, dirty: false });
       if (db && activeConn) {
         await db.history.add({
@@ -46,7 +53,7 @@ export function SqlEditor({ tab }: { tab: QueryTab }) {
     } catch (e) {
       update(tab.id, { running: false, error: (e as Error).message });
     }
-  }, [tab.id, tab.sql, update, activeConn]);
+  }, [tab.id, tab.sql, update, activeConn, useBridge, activePool]);
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;

@@ -10,6 +10,7 @@ import { useUI } from "@/stores/ui";
 import { Plus, Plug, Trash2, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { bridge } from "@/services/bridge";
 
 const empty = {
   name: "Local MySQL",
@@ -24,7 +25,9 @@ const empty = {
 
 export function ConnectionsDialog() {
   const { connectionsOpen, setConnections } = useUI();
+  const useBridge = useUI((s) => s.useBridge);
   const { list, load, upsert, remove, connect, activeId } = useConnections();
+  const setActivePool = useConnections((s) => s.setActivePool);
   const [editing, setEditing] = useState<(typeof empty) & { id?: string }>(empty);
   const [testing, setTesting] = useState(false);
 
@@ -45,16 +48,37 @@ export function ConnectionsDialog() {
 
   async function test() {
     setTesting(true);
-    await new Promise((r) => setTimeout(r, 700));
-    setTesting(false);
-    toast.success("Connection OK (mocked)");
+    try {
+      if (useBridge) {
+        const saved = await upsert(editing);
+        const res = await bridge.testConnection(saved);
+        toast.success(`Connection OK · ${res.latencyMs}ms`);
+      } else {
+        await new Promise((r) => setTimeout(r, 600));
+        toast.success("Connection OK (mock — enable bridge in settings)");
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setTesting(false);
+    }
   }
 
   async function connectNow() {
     const saved = await upsert(editing);
-    await connect(saved.id);
-    setConnections(false);
-    toast.success(`Connected to ${saved.name}`);
+    try {
+      if (useBridge) {
+        const { connectionId } = await bridge.connect(saved);
+        setActivePool(connectionId);
+      } else {
+        setActivePool(null);
+      }
+      await connect(saved.id);
+      setConnections(false);
+      toast.success(`Connected to ${saved.name}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   }
 
   return (

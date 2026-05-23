@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useUI } from "@/stores/ui";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 
 export function SettingsDialog() {
   const {
@@ -15,6 +16,10 @@ export function SettingsDialog() {
     setMinimap,
     resultDensity,
     setResultDensity,
+    bridgeUrl,
+    setBridgeUrl,
+    useBridge,
+    setUseBridge,
   } = useUI();
 
   return (
@@ -24,6 +29,19 @@ export function SettingsDialog() {
           <DialogTitle className="text-sm font-medium">Settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-xs">
+          <Row label="Local bridge" desc="Route queries through the local agent">
+            <Switch checked={useBridge} onCheckedChange={setUseBridge} />
+          </Row>
+          <Row label="Bridge URL" desc="Where the agent is running">
+            <div className="w-56">
+              <Input
+                value={bridgeUrl}
+                onChange={(e) => setBridgeUrl(e.target.value)}
+                placeholder="http://127.0.0.1:7717"
+                className="h-7 text-xs"
+              />
+            </div>
+          </Row>
           <Row label="Theme" desc="Appearance">
             <div className="flex gap-1 rounded-md bg-white/5 p-0.5">
               {(["dark", "light"] as const).map((t) => (
