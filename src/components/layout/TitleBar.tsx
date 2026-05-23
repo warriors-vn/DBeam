@@ -1,6 +1,7 @@
 import { useUI } from "@/stores/ui";
 import { useConnections } from "@/stores/connections";
 import { Database, PanelLeft, Plug, Search, Settings as Cog } from "lucide-react";
+import { BridgeStatus } from "./BridgeStatus";
 
 export function TitleBar() {
   const { toggleSidebar, setPalette, setSettings, setConnections } = useUI();
@@ -51,6 +52,8 @@ export function TitleBar() {
       </button>
 
       <div className="flex-1" />
+
+      <BridgeStatus />
 
       <button
         onClick={() => setConnections(true)}

@@ -5,17 +5,21 @@ import { uid } from "@/lib/id";
 interface ConnectionsState {
   list: Connection[];
   activeId: string | null;
+  /** Bridge pool id for the active connection, if connected via the local bridge. */
+  activePoolId: string | null;
   loaded: boolean;
   load: () => Promise<void>;
   upsert: (c: Omit<Connection, "id" | "createdAt"> & { id?: string }) => Promise<Connection>;
   remove: (id: string) => Promise<void>;
   connect: (id: string) => Promise<void>;
+  setActivePool: (poolId: string | null) => void;
   disconnect: () => void;
 }
 
 export const useConnections = create<ConnectionsState>((set, get) => ({
   list: [],
   activeId: null,
+  activePoolId: null,
   loaded: false,
   async load() {
     if (!db) return;
@@ -51,7 +55,10 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
     set({ activeId: id });
     await get().load();
   },
+  setActivePool(activePoolId) {
+    set({ activePoolId });
+  },
   disconnect() {
-    set({ activeId: null });
+    set({ activeId: null, activePoolId: null });
   },
 }));
