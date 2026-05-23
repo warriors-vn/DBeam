@@ -44,4 +44,5 @@ class TabletopDB extends Dexie {
   }
 }
 
-export const db = typeof window !== "undefined" ? new TabletopDB() : (undefined as unknown as TabletopDB);
+export const db =
+  typeof window !== "undefined" ? new TabletopDB() : (undefined as unknown as TabletopDB);

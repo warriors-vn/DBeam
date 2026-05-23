@@ -1,19 +1,23 @@
 import { create } from "zustand";
-import { db, type Connection } from "@/lib/db/dexie";
-import { uid } from "@/lib/id";
+import { bridge } from "@/services/bridge";
+import { loadActiveConnectionId, saveActiveConnectionId } from "@/services/persistence";
+import type { ConnectionDetails, ConnectionInput, ConnectionSummary } from "@/types/desktop";
 
 interface ConnectionsState {
-  list: Connection[];
+  list: ConnectionSummary[];
   activeId: string | null;
-  /** Bridge pool id for the active connection, if connected via the local bridge. */
   activePoolId: string | null;
   loaded: boolean;
+  loading: boolean;
+  hydrateSelection: () => Promise<void>;
   load: () => Promise<void>;
-  upsert: (c: Omit<Connection, "id" | "createdAt"> & { id?: string }) => Promise<Connection>;
+  upsert: (c: ConnectionInput) => Promise<ConnectionSummary>;
+  getConnection: (id: string) => Promise<ConnectionDetails>;
+  test: (c: ConnectionInput) => Promise<{ ok: true; latencyMs: number }>;
   remove: (id: string) => Promise<void>;
   connect: (id: string) => Promise<void>;
   setActivePool: (poolId: string | null) => void;
-  disconnect: () => void;
+  disconnect: () => Promise<void>;
 }
 
 export const useConnections = create<ConnectionsState>((set, get) => ({
@@ -21,44 +25,60 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
   activeId: null,
   activePoolId: null,
   loaded: false,
+  loading: false,
+  async hydrateSelection() {
+    set({ activeId: await loadActiveConnectionId() });
+  },
   async load() {
-    if (!db) return;
-    const list = await db.connections.orderBy("lastUsedAt").reverse().toArray();
-    set({ list, loaded: true });
+    set({ loading: true });
+    try {
+      const { connections } = await bridge.listConnections();
+      const list = [...connections].sort(
+        (a, b) => Number(b.lastUsedAt ?? 0) - Number(a.lastUsedAt ?? 0),
+      );
+      set({ list, loaded: true, loading: false });
+    } catch {
+      set({ loading: false });
+      throw new Error("Failed to load saved connections");
+    }
   },
   async upsert(c) {
-    const now = Date.now();
-    const next: Connection = {
-      id: c.id ?? uid(),
-      createdAt: now,
-      name: c.name,
-      host: c.host,
-      port: c.port,
-      username: c.username,
-      password: c.password,
-      database: c.database,
-      ssl: c.ssl,
-      color: c.color,
-      lastUsedAt: c.id ? get().list.find((x) => x.id === c.id)?.lastUsedAt : undefined,
-    };
-    await db.connections.put(next);
+    const saved = await bridge.saveConnection(c);
     await get().load();
-    return next;
+    return saved;
+  },
+  async getConnection(id) {
+    return bridge.getConnection(id);
+  },
+  async test(c) {
+    return bridge.testConnection(c);
   },
   async remove(id) {
-    await db.connections.delete(id);
-    if (get().activeId === id) set({ activeId: null });
+    if (get().activePoolId && get().activeId === id) {
+      await bridge.disconnect(get().activePoolId!);
+    }
+    await bridge.removeConnection(id);
+    if (get().activeId === id) {
+      set({ activeId: null, activePoolId: null });
+      await saveActiveConnectionId(null);
+    }
     await get().load();
   },
   async connect(id) {
-    await db.connections.update(id, { lastUsedAt: Date.now() });
-    set({ activeId: id });
+    const session = await bridge.connect(id);
+    set({ activeId: id, activePoolId: session.connectionId });
+    await saveActiveConnectionId(id);
     await get().load();
   },
   setActivePool(activePoolId) {
     set({ activePoolId });
   },
-  disconnect() {
+  async disconnect() {
+    const activePoolId = get().activePoolId;
+    if (activePoolId) {
+      await bridge.disconnect(activePoolId);
+    }
     set({ activeId: null, activePoolId: null });
+    await saveActiveConnectionId(null);
   },
 }));

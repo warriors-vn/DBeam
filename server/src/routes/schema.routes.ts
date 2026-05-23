@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { listColumns, listDatabases, listProcedures, listTables } from "../repositories/schema.repo.js";
+import {
+  listColumns,
+  listDatabases,
+  listProcedures,
+  listTables,
+} from "../repositories/schema.repo.js";
 
 export const schemaRouter = Router();
 

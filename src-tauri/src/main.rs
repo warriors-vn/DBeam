@@ -1,0 +1,4 @@
+fn main() {
+    dbeam::run();
+}
+

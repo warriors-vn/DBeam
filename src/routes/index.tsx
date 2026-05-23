@@ -4,11 +4,11 @@ import { AppShell } from "@/components/layout/AppShell";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Tabletop — MySQL workspace" },
+      { title: "DBeam — Native database IDE" },
       {
         name: "description",
         content:
-          "A fast, beautiful, keyboard-first MySQL workspace inspired by TablePlus and Linear.",
+          "A premium native database IDE inspired by TablePlus, Linear, Raycast, Arc, and VSCode.",
       },
     ],
   }),

@@ -34,8 +34,12 @@ connectionsRouter.post("/test", validateBody(connSchema), async (req, res) => {
   const body = req.body as z.infer<typeof connSchema>;
   const started = Date.now();
   await testConnection({
-    host: body.host, port: body.port, user: body.username,
-    password: body.password, database: body.database || undefined, ssl: body.ssl,
+    host: body.host,
+    port: body.port,
+    user: body.username,
+    password: body.password,
+    database: body.database || undefined,
+    ssl: body.ssl,
   });
   res.json({ ok: true, latencyMs: Date.now() - started });
 });
@@ -46,8 +50,12 @@ connectionsRouter.post("/connect", validateBody(connectSchema), async (req, res)
   const c = store.get(id);
   if (!c) return res.status(404).json({ error: "NotFound" });
   const poolId = await openPool({
-    host: c.host, port: c.port, user: c.username,
-    password: c.password, database: c.database || undefined, ssl: c.ssl,
+    host: c.host,
+    port: c.port,
+    user: c.username,
+    password: c.password,
+    database: c.database || undefined,
+    ssl: c.ssl,
   });
   await store.touchUsed(id);
   broadcast("connection.opened", { connectionId: poolId, name: c.name });

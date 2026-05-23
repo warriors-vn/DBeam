@@ -1,17 +1,16 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useMemo, useRef, useState } from "react";
-import type { QueryResult } from "@/mock/execute";
+import { type MouseEvent as ReactMouseEvent, useMemo, useRef, useState } from "react";
+import type { QueryResult } from "@/types/desktop";
 import { useUI } from "@/stores/ui";
 import { ArrowDown, ArrowUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { bridge, isTauriDesktop } from "@/services/bridge";
 
 export function ResultsTable({ result }: { result: QueryResult }) {
   const { resultDensity } = useUI();
   const parentRef = useRef<HTMLDivElement>(null);
   const [sort, setSort] = useState<{ col: number; dir: "asc" | "desc" } | null>(null);
-  const [widths, setWidths] = useState<number[]>(() =>
-    result.columns.map(() => 160),
-  );
+  const [widths, setWidths] = useState<number[]>(() => result.columns.map(() => 160));
 
   const rows = useMemo(() => {
     if (!sort) return result.rows;
@@ -35,27 +34,27 @@ export function ResultsTable({ result }: { result: QueryResult }) {
     overscan: 12,
   });
 
-  function exportCsv() {
-    const head = result.columns.map((c) => c.name).join(",");
-    const body = rows
-      .map((r) =>
-        r
-          .map((v) =>
-            v == null
-              ? ""
-              : `"${String(v).replace(/"/g, '""')}"`,
-          )
-          .join(","),
-      )
-      .join("\n");
-    const blob = new Blob([`${head}\n${body}`], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "results.csv";
-    a.click();
+  async function exportData(format: "csv" | "json") {
+    let path: string | null = null;
+
+    if (isTauriDesktop()) {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      path = await save({
+        defaultPath: `query-results.${format}`,
+        filters: [
+          {
+            name: format.toUpperCase(),
+            extensions: [format],
+          },
+        ],
+      });
+      if (!path) return;
+    }
+
+    await bridge.exportResult(result, format, path);
   }
 
-  function startResize(idx: number, e: React.MouseEvent) {
+  function startResize(idx: number, e: ReactMouseEvent<HTMLDivElement>) {
     e.preventDefault();
     const startX = e.clientX;
     const startW = widths[idx];
@@ -93,17 +92,20 @@ export function ResultsTable({ result }: { result: QueryResult }) {
         </span>
         <div className="ml-auto flex items-center gap-1">
           <button
-            onClick={exportCsv}
+            onClick={() => void exportData("csv")}
             className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent hover:text-foreground"
           >
             <Download className="size-3" /> CSV
           </button>
+          <button
+            onClick={() => void exportData("json")}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent hover:text-foreground"
+          >
+            <Download className="size-3" /> JSON
+          </button>
         </div>
       </div>
-      <div
-        ref={parentRef}
-        className="scrollbar-thin relative flex-1 overflow-auto mono text-xs"
-      >
+      <div ref={parentRef} className="scrollbar-thin relative flex-1 overflow-auto mono text-xs">
         <div style={{ width: totalWidth }}>
           <div className="glass-soft sticky top-0 z-10 flex border-b border-border/60">
             {result.columns.map((c, i) => {
@@ -125,16 +127,10 @@ export function ResultsTable({ result }: { result: QueryResult }) {
                     className="flex min-w-0 items-center gap-1 truncate text-foreground hover:text-primary"
                   >
                     <span className="truncate font-medium">{c.name}</span>
-                    {isSorted && sort.dir === "asc" && (
-                      <ArrowUp className="size-3" />
-                    )}
-                    {isSorted && sort.dir === "desc" && (
-                      <ArrowDown className="size-3" />
-                    )}
+                    {isSorted && sort.dir === "asc" && <ArrowUp className="size-3" />}
+                    {isSorted && sort.dir === "desc" && <ArrowDown className="size-3" />}
                   </button>
-                  <span className="ml-1 truncate text-[10px] text-muted-foreground">
-                    {c.type}
-                  </span>
+                  <span className="ml-1 truncate text-[10px] text-muted-foreground">{c.type}</span>
                   <div
                     onMouseDown={(e) => startResize(i, e)}
                     className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-primary/40"
@@ -143,9 +139,7 @@ export function ResultsTable({ result }: { result: QueryResult }) {
               );
             })}
           </div>
-          <div
-            style={{ height: v.getTotalSize(), position: "relative" }}
-          >
+          <div style={{ height: v.getTotalSize(), position: "relative" }}>
             {v.getVirtualItems().map((vr) => {
               const row = rows[vr.index];
               return (

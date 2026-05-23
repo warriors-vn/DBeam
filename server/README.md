@@ -26,20 +26,20 @@ click the bridge status pill in the title bar, and verify it shows "Online".
 
 ## API
 
-| Method | Path                              | Purpose                          |
-| ------ | --------------------------------- | -------------------------------- |
-| GET    | `/health`                         | Liveness probe                   |
-| POST   | `/connections/test`               | Try a connection without saving  |
-| POST   | `/connections/connect`            | Open + cache a pool, return id   |
-| POST   | `/connections/disconnect`         | Close a pool                     |
-| GET    | `/schemas?connectionId=...`       | List databases                   |
-| GET    | `/tables?connectionId=...&db=...` | List tables + views              |
-| GET    | `/tables/:table/columns`          | Columns + indexes + FKs          |
-| POST   | `/query/execute`                  | Run arbitrary SQL                |
-| POST   | `/query/preview`                  | Wrap query with `LIMIT n`        |
-| POST   | `/rows/insert`                    | Insert one row                   |
-| POST   | `/rows/update`                    | Update one row by primary key    |
-| POST   | `/rows/delete`                    | Delete one row by primary key    |
+| Method | Path                              | Purpose                         |
+| ------ | --------------------------------- | ------------------------------- |
+| GET    | `/health`                         | Liveness probe                  |
+| POST   | `/connections/test`               | Try a connection without saving |
+| POST   | `/connections/connect`            | Open + cache a pool, return id  |
+| POST   | `/connections/disconnect`         | Close a pool                    |
+| GET    | `/schemas?connectionId=...`       | List databases                  |
+| GET    | `/tables?connectionId=...&db=...` | List tables + views             |
+| GET    | `/tables/:table/columns`          | Columns + indexes + FKs         |
+| POST   | `/query/execute`                  | Run arbitrary SQL               |
+| POST   | `/query/preview`                  | Wrap query with `LIMIT n`       |
+| POST   | `/rows/insert`                    | Insert one row                  |
+| POST   | `/rows/update`                    | Update one row by primary key   |
+| POST   | `/rows/delete`                    | Delete one row by primary key   |
 
 WebSocket endpoint: `ws://localhost:7717/ws` — broadcasts `{type, payload}`
 events for query lifecycle and bridge logs.

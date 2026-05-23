@@ -42,7 +42,12 @@ export const store = {
     if (!c) return null;
     return { ...c, password: decrypt(c.passwordEnc) };
   },
-  async upsert(c: Omit<StoredConnection, "passwordEnc" | "createdAt"> & { password: string; createdAt?: number }) {
+  async upsert(
+    c: Omit<StoredConnection, "passwordEnc" | "createdAt"> & {
+      password: string;
+      createdAt?: number;
+    },
+  ) {
     const existing = db.data.connections.find((x) => x.id === c.id);
     const row: StoredConnection = {
       id: c.id,

@@ -12,18 +12,15 @@ import { SettingsDialog } from "@/features/palette/SettingsDialog";
 import { CommandPalette } from "@/features/palette/CommandPalette";
 import { Toaster } from "@/components/ui/sonner";
 import { Database, Plug, Sparkles } from "lucide-react";
+import { useDesktopBootstrap } from "@/hooks/use-desktop-bootstrap";
 
 export function AppShell() {
-  const { tabs, activeId, close, newQueryTab } = useTabs();
+  const ready = useDesktopBootstrap();
+  const { tabs, activeId, close, newQueryTab, setActive } = useTabs();
   const { theme, setPalette, setConnections } = useUI();
-  const loadConnections = useConnections((s) => s.load);
   const activeConnId = useConnections((s) => s.activeId);
   const connList = useConnections((s) => s.list);
   const activeConn = connList.find((c) => c.id === activeConnId);
-
-  useEffect(() => {
-    void loadConnections();
-  }, [loadConnections]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("light", theme === "light");
@@ -44,13 +41,34 @@ export function AppShell() {
       } else if (mod && e.key.toLowerCase() === "w") {
         e.preventDefault();
         if (activeId) close(activeId);
+      } else if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        const idx = tabs.findIndex((tab) => tab.id === activeId);
+        const next = tabs[idx + 1] ?? tabs[0];
+        if (next) setActive(next.id);
+      } else if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        const idx = tabs.findIndex((tab) => tab.id === activeId);
+        const next = tabs[idx - 1] ?? tabs[tabs.length - 1];
+        if (next) setActive(next.id);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeId, close, newQueryTab, setPalette]);
+  }, [activeId, close, newQueryTab, setActive, setPalette, tabs]);
 
   const active = tabs.find((t) => t.id === activeId);
+
+  if (!ready) {
+    return (
+      <div className="app-ambient flex h-screen w-screen items-center justify-center text-foreground">
+        <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4 text-sm text-muted-foreground">
+          <span className="size-2 rounded-full bg-primary" />
+          Booting native workspace…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-ambient flex h-screen w-screen flex-col text-foreground">
@@ -99,9 +117,9 @@ function Welcome({
         <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
           <Database className="size-6" />
         </div>
-        <h1 className="text-lg font-semibold tracking-tight">Tabletop</h1>
+        <h1 className="text-lg font-semibold tracking-tight">DBeam</h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          A fast, beautiful MySQL workspace. Built for keyboard-first developers.
+          A fast, premium native database IDE built for keyboard-first developers.
         </p>
         <div className="mt-6 grid grid-cols-2 gap-2">
           <button
@@ -130,7 +148,8 @@ function Welcome({
           </button>
         </div>
         <div className="mt-6 text-[11px] text-muted-foreground">
-          Press <span className="kbd">⌘</span> <span className="kbd">K</span> for the command palette
+          Press <span className="kbd">⌘</span> <span className="kbd">K</span> for the command
+          palette
         </div>
       </div>
     </div>

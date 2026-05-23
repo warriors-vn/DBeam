@@ -1,25 +1,20 @@
 import { create } from "zustand";
-
-const BRIDGE_URL_KEY = "tabletop:bridgeUrl";
-const USE_BRIDGE_KEY = "tabletop:useBridge";
-const DEFAULT_BRIDGE_URL = "http://127.0.0.1:7717";
-
-function readLS(key: string, fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  return window.localStorage.getItem(key) ?? fallback;
-}
+import { defaultPreferences, loadPreferences, savePreferences } from "@/services/persistence";
+import type { AppPreferences } from "@/types/desktop";
 
 interface UIState {
   sidebarCollapsed: boolean;
   paletteOpen: boolean;
   settingsOpen: boolean;
   connectionsOpen: boolean;
-  theme: "dark" | "light";
+  hydrated: boolean;
+  theme: AppPreferences["theme"];
   fontSize: number;
   minimap: boolean;
-  resultDensity: "compact" | "comfortable";
-  bridgeUrl: string;
-  useBridge: boolean;
+  resultDensity: AppPreferences["resultDensity"];
+  reducedMotion: boolean;
+  vimMode: boolean;
+  hydrate: () => Promise<void>;
   toggleSidebar: () => void;
   setPalette: (open: boolean) => void;
   setSettings: (open: boolean) => void;
@@ -28,39 +23,63 @@ interface UIState {
   setFontSize: (n: number) => void;
   setMinimap: (b: boolean) => void;
   setResultDensity: (d: UIState["resultDensity"]) => void;
-  setBridgeUrl: (url: string) => void;
-  setUseBridge: (b: boolean) => void;
+  setReducedMotion: (b: boolean) => void;
+  setVimMode: (b: boolean) => void;
 }
 
-export const useUI = create<UIState>((set) => ({
+function pickPreferences(state: UIState): AppPreferences {
+  return {
+    theme: state.theme,
+    fontSize: state.fontSize,
+    minimap: state.minimap,
+    resultDensity: state.resultDensity,
+    reducedMotion: state.reducedMotion,
+    vimMode: state.vimMode,
+  };
+}
+
+export const useUI = create<UIState>((set, get) => ({
   sidebarCollapsed: false,
   paletteOpen: false,
   settingsOpen: false,
   connectionsOpen: false,
-  theme: "dark",
-  fontSize: 13,
-  minimap: false,
-  resultDensity: "comfortable",
-  bridgeUrl: readLS(BRIDGE_URL_KEY, DEFAULT_BRIDGE_URL),
-  useBridge: readLS(USE_BRIDGE_KEY, "true") === "true",
+  hydrated: false,
+  theme: defaultPreferences.theme,
+  fontSize: defaultPreferences.fontSize,
+  minimap: defaultPreferences.minimap,
+  resultDensity: defaultPreferences.resultDensity,
+  reducedMotion: defaultPreferences.reducedMotion,
+  vimMode: defaultPreferences.vimMode,
+  async hydrate() {
+    const preferences = await loadPreferences();
+    set({ hydrated: true, ...preferences });
+  },
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setPalette: (paletteOpen) => set({ paletteOpen }),
   setSettings: (settingsOpen) => set({ settingsOpen }),
   setConnections: (connectionsOpen) => set({ connectionsOpen }),
-  setTheme: (theme) => set({ theme }),
-  setFontSize: (fontSize) => set({ fontSize }),
-  setMinimap: (minimap) => set({ minimap }),
-  setResultDensity: (resultDensity) => set({ resultDensity }),
-  setBridgeUrl: (bridgeUrl) => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(BRIDGE_URL_KEY, bridgeUrl.replace(/\/$/, ""));
-    }
-    set({ bridgeUrl: bridgeUrl.replace(/\/$/, "") });
+  setTheme: (theme) => {
+    set({ theme });
+    void savePreferences(pickPreferences(get()));
   },
-  setUseBridge: (useBridge) => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(USE_BRIDGE_KEY, String(useBridge));
-    }
-    set({ useBridge });
+  setFontSize: (fontSize) => {
+    set({ fontSize });
+    void savePreferences(pickPreferences(get()));
+  },
+  setMinimap: (minimap) => {
+    set({ minimap });
+    void savePreferences(pickPreferences(get()));
+  },
+  setResultDensity: (resultDensity) => {
+    set({ resultDensity });
+    void savePreferences(pickPreferences(get()));
+  },
+  setReducedMotion: (reducedMotion) => {
+    set({ reducedMotion });
+    void savePreferences(pickPreferences(get()));
+  },
+  setVimMode: (vimMode) => {
+    set({ vimMode });
+    void savePreferences(pickPreferences(get()));
   },
 }));

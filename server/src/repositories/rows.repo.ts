@@ -15,7 +15,12 @@ export async function insertRow(
   const { pool } = getPool(connectionId);
   const cols = Object.keys(values);
   const sql = `INSERT INTO ${ident(database)}.${ident(table)} (${cols.map(ident).join(",")}) VALUES (${cols.map(() => "?").join(",")})`;
-  const [res] = await withTimeout(pool.query(sql, cols.map((c) => values[c])));
+  const [res] = await withTimeout(
+    pool.query(
+      sql,
+      cols.map((c) => values[c]),
+    ),
+  );
   const header = res as ResultSetHeader;
   return { affected: header.affectedRows, insertId: header.insertId };
 }
@@ -55,6 +60,11 @@ export async function deleteRow(
     `DELETE FROM ${ident(database)}.${ident(table)} WHERE ` +
     whereCols.map((c) => `${ident(c)} = ?`).join(" AND ") +
     ` LIMIT 1`;
-  const [res] = await withTimeout(pool.query(sql, whereCols.map((c) => where[c])));
+  const [res] = await withTimeout(
+    pool.query(
+      sql,
+      whereCols.map((c) => where[c]),
+    ),
+  );
   return { affected: (res as ResultSetHeader).affectedRows };
 }

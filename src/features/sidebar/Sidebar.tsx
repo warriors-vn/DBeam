@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import {
   ChevronRight,
   Database,
@@ -8,36 +8,37 @@ import {
   Search,
   Plus,
   Plug,
+  Loader2,
 } from "lucide-react";
 import { useUI } from "@/stores/ui";
 import { useConnections } from "@/stores/connections";
-import { databasesForConnection } from "@/mock/schema";
 import { useTabs } from "@/stores/tabs";
 import { cn } from "@/lib/utils";
+import { useExplorerCatalog } from "@/services/queries";
 
 export function Sidebar() {
   const { sidebarCollapsed, setConnections } = useUI();
-  const { activeId, list } = useConnections();
+  const { activeId, activePoolId, list } = useConnections();
   const active = list.find((c) => c.id === activeId);
-  const dbs = active ? databasesForConnection(active) : [];
   const [query, setQuery] = useState("");
+  const { databases, isLoading } = useExplorerCatalog(activePoolId);
   const [open, setOpen] = useState<Record<string, boolean>>({
-    [dbs[0]?.name ?? ""]: true,
-    [`${dbs[0]?.name ?? ""}::tables`]: true,
+    [databases[0]?.name ?? ""]: true,
   });
   const openTab = useTabs((s) => s.openTable);
   const newQuery = useTabs((s) => s.newQueryTab);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return dbs;
+    if (!query.trim()) return databases;
     const q = query.toLowerCase();
-    return dbs
+    return databases
       .map((d) => ({
         ...d,
         tables: d.tables.filter((t) => t.name.toLowerCase().includes(q)),
+        procedures: d.procedures.filter((p) => p.toLowerCase().includes(q)),
       }))
-      .filter((d) => d.tables.length);
-  }, [dbs, query]);
+      .filter((d) => d.tables.length || d.procedures.length || d.name.toLowerCase().includes(q));
+  }, [databases, query]);
 
   if (sidebarCollapsed) {
     return (
@@ -107,6 +108,16 @@ export function Sidebar() {
             </button>
           </div>
         )}
+        {active && !activePoolId && (
+          <div className="px-2 py-8 text-center text-xs text-muted-foreground">
+            Connect this saved profile to load schema.
+          </div>
+        )}
+        {active && activePoolId && isLoading && (
+          <div className="flex items-center justify-center gap-2 px-2 py-8 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" /> Caching schema…
+          </div>
+        )}
         {filtered.map((d) => (
           <div key={d.name} className="mb-1">
             <button
@@ -124,11 +135,7 @@ export function Sidebar() {
             </button>
             {open[d.name] && (
               <div className="ml-3 border-l border-border/60 pl-2">
-                <Group
-                  label="Tables"
-                  icon={<Table2 className="size-3.5" />}
-                  defaultOpen
-                >
+                <Group label="Tables" icon={<Table2 className="size-3.5" />} defaultOpen>
                   {d.tables
                     .filter((t) => t.kind === "table")
                     .map((t) => (
@@ -144,17 +151,10 @@ export function Sidebar() {
                   {d.tables
                     .filter((t) => t.kind === "view")
                     .map((t) => (
-                      <Item
-                        key={t.name}
-                        label={t.name}
-                        onClick={() => openTab(d.name, t.name)}
-                      />
+                      <Item key={t.name} label={t.name} onClick={() => openTab(d.name, t.name)} />
                     ))}
                 </Group>
-                <Group
-                  label="Procedures"
-                  icon={<FunctionSquare className="size-3.5" />}
-                >
+                <Group label="Procedures" icon={<FunctionSquare className="size-3.5" />}>
                   {d.procedures.map((p) => (
                     <Item key={p} label={p} />
                   ))}
@@ -188,8 +188,8 @@ function Group({
   defaultOpen,
 }: {
   label: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(!!defaultOpen);
@@ -200,9 +200,7 @@ function Group({
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-medium tracking-wider text-muted-foreground uppercase hover:text-foreground"
       >
-        <ChevronRight
-          className={cn("size-2.5 transition-transform", open && "rotate-90")}
-        />
+        <ChevronRight className={cn("size-2.5 transition-transform", open && "rotate-90")} />
         {icon}
         <span>{label}</span>
         <span className="ml-auto text-muted-foreground/70">{arr.length}</span>
@@ -212,24 +210,14 @@ function Group({
   );
 }
 
-function Item({
-  label,
-  meta,
-  onClick,
-}: {
-  label: string;
-  meta?: string;
-  onClick?: () => void;
-}) {
+function Item({ label, meta, onClick }: { label: string; meta?: string; onClick?: () => void }) {
   return (
     <button
       onClick={onClick}
       className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-foreground/90 hover:bg-accent"
     >
       <span className="truncate">{label}</span>
-      {meta && (
-        <span className="ml-auto text-[10px] text-muted-foreground">{meta}</span>
-      )}
+      {meta && <span className="ml-auto text-[10px] text-muted-foreground">{meta}</span>}
     </button>
   );
 }

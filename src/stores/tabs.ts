@@ -1,48 +1,45 @@
 import { create } from "zustand";
 import { uid } from "@/lib/id";
-import type { QueryResult } from "@/mock/execute";
+import {
+  loadActiveTabId,
+  loadWorkspaceTabs,
+  saveActiveTabId,
+  saveWorkspaceTabs,
+} from "@/services/persistence";
+import type {
+  QueryTabState as QueryTab,
+  TableTabState as TableTab,
+  WorkspaceTabState as Tab,
+} from "@/types/desktop";
 
-export type TabKind = "query" | "table";
-
-export interface BaseTab {
-  id: string;
-  kind: TabKind;
-  title: string;
-  dirty?: boolean;
-}
-
-export interface QueryTab extends BaseTab {
-  kind: "query";
-  sql: string;
-  result?: QueryResult;
-  running?: boolean;
-  error?: string;
-}
-
-export interface TableTab extends BaseTab {
-  kind: "table";
-  database: string;
-  table: string;
-  result?: QueryResult;
-  running?: boolean;
-}
-
-export type Tab = QueryTab | TableTab;
+export type { QueryTab, TableTab, Tab };
 
 interface TabsState {
   tabs: Tab[];
   activeId: string | null;
+  hydrated: boolean;
+  hydrate: () => Promise<void>;
   newQueryTab: (sql?: string) => string;
   openTable: (database: string, table: string) => string;
   close: (id: string) => void;
   setActive: (id: string) => void;
   update: (id: string, patch: Partial<Tab>) => void;
   rename: (id: string, title: string) => void;
+  toggleSticky: (id: string) => void;
+}
+
+async function persistTabs(tabs: Tab[], activeId: string | null) {
+  await Promise.all([saveWorkspaceTabs(tabs), saveActiveTabId(activeId)]);
 }
 
 export const useTabs = create<TabsState>((set, get) => ({
   tabs: [],
   activeId: null,
+  hydrated: false,
+  async hydrate() {
+    const [tabs, activeId] = await Promise.all([loadWorkspaceTabs(), loadActiveTabId()]);
+    set({ tabs, activeId, hydrated: true });
+  },
   newQueryTab(sql = "-- New query\nSELECT * FROM users LIMIT 100;") {
     const id = uid();
     const tab: QueryTab = {
@@ -50,8 +47,11 @@ export const useTabs = create<TabsState>((set, get) => ({
       kind: "query",
       title: `Query ${get().tabs.filter((t) => t.kind === "query").length + 1}`,
       sql,
+      sticky: false,
     };
-    set({ tabs: [...get().tabs, tab], activeId: id });
+    const tabs = [...get().tabs, tab];
+    set({ tabs, activeId: id });
+    void persistTabs(tabs, id);
     return id;
   },
   openTable(database, table) {
@@ -60,28 +60,46 @@ export const useTabs = create<TabsState>((set, get) => ({
     );
     if (existing) {
       set({ activeId: existing.id });
+      void saveActiveTabId(existing.id);
       return existing.id;
     }
     const id = uid();
-    const tab: TableTab = { id, kind: "table", title: table, database, table };
-    set({ tabs: [...get().tabs, tab], activeId: id });
+    const tab: TableTab = {
+      id,
+      kind: "table",
+      title: table,
+      database,
+      table,
+      sticky: false,
+    };
+    const tabs = [...get().tabs, tab];
+    set({ tabs, activeId: id });
+    void persistTabs(tabs, id);
     return id;
   },
   close(id) {
     const tabs = get().tabs.filter((t) => t.id !== id);
-    const activeId =
-      get().activeId === id ? (tabs[tabs.length - 1]?.id ?? null) : get().activeId;
+    const activeId = get().activeId === id ? (tabs[tabs.length - 1]?.id ?? null) : get().activeId;
     set({ tabs, activeId });
+    void persistTabs(tabs, activeId);
   },
   setActive(id) {
     set({ activeId: id });
+    void saveActiveTabId(id);
   },
   update(id, patch) {
-    set({
-      tabs: get().tabs.map((t) => (t.id === id ? ({ ...t, ...patch } as Tab) : t)),
-    });
+    const tabs = get().tabs.map((t) => (t.id === id ? ({ ...t, ...patch } as Tab) : t));
+    set({ tabs });
+    void persistTabs(tabs, get().activeId);
   },
   rename(id, title) {
-    set({ tabs: get().tabs.map((t) => (t.id === id ? { ...t, title } : t)) });
+    const tabs = get().tabs.map((t) => (t.id === id ? { ...t, title } : t));
+    set({ tabs });
+    void persistTabs(tabs, get().activeId);
+  },
+  toggleSticky(id) {
+    const tabs = get().tabs.map((t) => (t.id === id ? { ...t, sticky: !t.sticky } : t));
+    set({ tabs });
+    void persistTabs(tabs, get().activeId);
   },
 }));

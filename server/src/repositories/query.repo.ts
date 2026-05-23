@@ -17,10 +17,26 @@ export interface ExecResult {
 }
 
 const TYPE_NAMES: Record<number, string> = {
-  0: "decimal", 1: "tinyint", 2: "smallint", 3: "int", 4: "float",
-  5: "double", 7: "timestamp", 8: "bigint", 9: "mediumint", 10: "date",
-  11: "time", 12: "datetime", 13: "year", 15: "varchar", 16: "bit",
-  245: "json", 246: "decimal", 252: "blob", 253: "varchar", 254: "char",
+  0: "decimal",
+  1: "tinyint",
+  2: "smallint",
+  3: "int",
+  4: "float",
+  5: "double",
+  7: "timestamp",
+  8: "bigint",
+  9: "mediumint",
+  10: "date",
+  11: "time",
+  12: "datetime",
+  13: "year",
+  15: "varchar",
+  16: "bit",
+  245: "json",
+  246: "decimal",
+  252: "blob",
+  253: "varchar",
+  254: "char",
 };
 
 const DANGEROUS = /^\s*(drop|truncate)\b/i;
@@ -41,8 +57,13 @@ export async function execute(connectionId: string, sql: string): Promise<ExecRe
 
   if (Array.isArray(result)) {
     const columns: QueryColumn[] =
-      fields?.map((f) => ({ name: f.name, type: TYPE_NAMES[f.type as number] ?? String(f.type) })) ?? [];
-    const rows = result.map((r) => columns.map((c) => (r as Record<string, unknown>)[c.name] ?? null));
+      fields?.map((f) => ({
+        name: f.name,
+        type: TYPE_NAMES[f.type as number] ?? String(f.type),
+      })) ?? [];
+    const rows = result.map((r) =>
+      columns.map((c) => (r as Record<string, unknown>)[c.name] ?? null),
+    );
     return { columns, rows, rowCount: rows.length, durationMs };
   }
 
@@ -57,7 +78,11 @@ export async function execute(connectionId: string, sql: string): Promise<ExecRe
   };
 }
 
-export async function preview(connectionId: string, sql: string, limit: number): Promise<ExecResult> {
+export async function preview(
+  connectionId: string,
+  sql: string,
+  limit: number,
+): Promise<ExecResult> {
   const trimmed = sql.trim().replace(/;+\s*$/, "");
   return execute(connectionId, `SELECT * FROM (${trimmed}) AS _p LIMIT ${Math.min(limit, 5000)}`);
 }

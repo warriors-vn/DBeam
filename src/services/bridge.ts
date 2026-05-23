@@ -1,191 +1,299 @@
-/**
- * Thin HTTP + WebSocket client for the local Tabletop bridge agent.
- * The bridge runs at http://127.0.0.1:7717 by default — configurable in Settings.
- */
-import type { Connection } from "@/lib/db/dexie";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+import { mockExecute } from "@/mock/execute";
+import { mockDatabases } from "@/mock/schema";
+import type {
+  ColumnInfo,
+  ConnectionDetails,
+  ConnectionInput,
+  ConnectionSession,
+  ConnectionSummary,
+  DesktopEvent,
+  QueryHistoryEntry,
+  QueryResult,
+  RuntimeHealth,
+  TableInfo,
+} from "@/types/desktop";
 
-export interface BridgeHealth {
-  ok: true;
-  name: string;
-  version: string;
-  safeMode: boolean;
-  uptimeSec: number;
+const BROWSER_CONNECTIONS_KEY = "dbeam:connections";
+
+export type BridgeHealth = RuntimeHealth;
+export type BridgeQueryResult = QueryResult;
+export type BridgeTableInfo = TableInfo;
+export type BridgeColumnInfo = ColumnInfo;
+
+export function isTauriDesktop() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-export interface BridgeColumn {
-  name: string;
-  type: string;
-}
+function readBrowserConnections(): ConnectionDetails[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(BROWSER_CONNECTIONS_KEY);
+  if (!raw) return [];
 
-export interface BridgeQueryResult {
-  columns: BridgeColumn[];
-  rows: Array<Array<string | number | boolean | null>>;
-  rowCount: number;
-  affected?: number;
-  durationMs: number;
-  message?: string;
-}
-
-export interface BridgeTableInfo {
-  name: string;
-  kind: "table" | "view";
-  rows: number;
-}
-
-export interface BridgeColumnInfo {
-  name: string;
-  type: string;
-  nullable: boolean;
-  default: string | null;
-  pk: boolean;
-  fk: { table: string; column: string } | null;
-}
-
-const DEFAULT_URL = "http://127.0.0.1:7717";
-
-export function getBridgeUrl(): string {
-  if (typeof window === "undefined") return DEFAULT_URL;
-  return window.localStorage.getItem("tabletop:bridgeUrl") || DEFAULT_URL;
-}
-
-export function setBridgeUrl(url: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem("tabletop:bridgeUrl", url.replace(/\/$/, ""));
-}
-
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getBridgeUrl()}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    try {
-      const json = JSON.parse(body) as { message?: string; error?: string };
-      throw new Error(json.message ?? json.error ?? `Bridge ${res.status}`);
-    } catch {
-      throw new Error(`Bridge ${res.status}: ${body.slice(0, 200)}`);
-    }
+  try {
+    return JSON.parse(raw) as ConnectionDetails[];
+  } catch {
+    return [];
   }
-  return res.json() as Promise<T>;
 }
 
-function connPayload(c: Connection) {
-  return {
-    id: c.id,
-    name: c.name,
-    host: c.host,
-    port: c.port,
-    username: c.username,
-    password: c.password,
-    database: c.database,
-    ssl: c.ssl,
-    favorite: false,
-  };
+function writeBrowserConnections(connections: ConnectionDetails[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(BROWSER_CONNECTIONS_KEY, JSON.stringify(connections));
+}
+
+function toSummary(connection: ConnectionDetails): ConnectionSummary {
+  const { password: _password, ...summary } = connection;
+  return summary;
+}
+
+async function invokeNative<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    throw error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+function browserTableLookup(database: string, table: string) {
+  return mockDatabases
+    .find((entry) => entry.name === database)
+    ?.tables.find((entry) => entry.name === table);
+}
+
+function mapMockColumns(database: string, table: string): ColumnInfo[] {
+  return (browserTableLookup(database, table)?.columns ?? []).map((column) => ({
+    name: column.name,
+    type: column.type,
+    nullable: column.nullable,
+    default: column.default ?? null,
+    pk: column.pk ?? false,
+    fk: column.fk ?? null,
+  }));
+}
+
+function downloadBrowserFile(fileName: string, body: string, mime: string) {
+  if (typeof window === "undefined") return;
+  const blob = new Blob([body], { type: mime });
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = fileName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(href), 500);
+}
+
+export async function notifyDesktop(title: string, body: string) {
+  if (!isTauriDesktop()) return;
+  let granted = await isPermissionGranted();
+  if (!granted) {
+    const permission = await requestPermission();
+    granted = permission === "granted";
+  }
+  if (granted) {
+    sendNotification({ title, body });
+  }
 }
 
 export const bridge = {
-  health(): Promise<BridgeHealth> {
-    return call<BridgeHealth>("/health");
+  async health(): Promise<BridgeHealth> {
+    if (!isTauriDesktop()) {
+      return {
+        ok: true,
+        name: "dbeam-preview",
+        version: "browser",
+        native: false,
+        platform: typeof navigator !== "undefined" ? navigator.platform : "browser",
+        uptimeSec: 0,
+      };
+    }
+
+    return invokeNative<BridgeHealth>("desktop_health");
   },
-  async testConnection(c: Connection): Promise<{ ok: true; latencyMs: number }> {
-    return call("/connections/test", {
-      method: "POST",
-      body: JSON.stringify(connPayload(c)),
+
+  async listConnections(): Promise<{ connections: ConnectionSummary[] }> {
+    if (!isTauriDesktop()) {
+      return { connections: readBrowserConnections().map(toSummary) };
+    }
+
+    return invokeNative("list_connections");
+  },
+
+  async getConnection(id: string): Promise<ConnectionDetails> {
+    if (!isTauriDesktop()) {
+      const connection = readBrowserConnections().find((entry) => entry.id === id);
+      if (!connection) throw new Error("Connection not found");
+      return connection;
+    }
+
+    return invokeNative("get_connection", { id });
+  },
+
+  async testConnection(connection: ConnectionInput): Promise<{ ok: true; latencyMs: number }> {
+    if (!isTauriDesktop()) {
+      return { ok: true, latencyMs: 48 };
+    }
+
+    return invokeNative("test_connection", { input: connection });
+  },
+
+  async saveConnection(connection: ConnectionInput): Promise<ConnectionSummary> {
+    if (!isTauriDesktop()) {
+      const connections = readBrowserConnections();
+      const next: ConnectionDetails = {
+        ...connection,
+        id: connection.id ?? crypto.randomUUID(),
+        createdAt: connections.find((entry) => entry.id === connection.id)?.createdAt ?? Date.now(),
+        lastUsedAt: connections.find((entry) => entry.id === connection.id)?.lastUsedAt ?? null,
+      };
+      const nextList = connections.filter((entry) => entry.id !== next.id);
+      nextList.unshift(next);
+      writeBrowserConnections(nextList);
+      return toSummary(next);
+    }
+
+    return invokeNative("save_connection", { input: connection });
+  },
+
+  async removeConnection(id: string): Promise<void> {
+    if (!isTauriDesktop()) {
+      writeBrowserConnections(readBrowserConnections().filter((entry) => entry.id !== id));
+      return;
+    }
+
+    await invokeNative("remove_connection", { id });
+  },
+
+  async connect(connectionOrId: string | ConnectionInput): Promise<ConnectionSession> {
+    if (!isTauriDesktop()) {
+      const id = typeof connectionOrId === "string" ? connectionOrId : connectionOrId.id;
+      if (!id) throw new Error("Connection id is required");
+      const connection = readBrowserConnections().find((entry) => entry.id === id);
+      if (!connection) throw new Error("Connection not found");
+      return {
+        connectionId: id,
+        name: connection.name,
+        engine: connection.engine,
+        connectedAt: Date.now(),
+      };
+    }
+
+    const id =
+      typeof connectionOrId === "string"
+        ? connectionOrId
+        : (connectionOrId.id ?? (await this.saveConnection(connectionOrId)).id);
+    return invokeNative("connect_connection", { id });
+  },
+
+  async disconnect(connectionId: string) {
+    if (!isTauriDesktop()) return;
+    await invokeNative("disconnect_connection", { id: connectionId });
+  },
+
+  async databases(connectionId: string): Promise<{ databases: string[] }> {
+    if (!isTauriDesktop()) {
+      return { databases: mockDatabases.map((entry) => entry.name) };
+    }
+
+    return invokeNative("list_databases", { connectionId });
+  },
+
+  async tables(
+    connectionId: string,
+    database: string,
+  ): Promise<{ tables: BridgeTableInfo[]; procedures: string[] }> {
+    if (!isTauriDesktop()) {
+      const entry = mockDatabases.find((item) => item.name === database);
+      return {
+        tables: entry?.tables.map(({ name, kind, rows }) => ({ name, kind, rows })) ?? [],
+        procedures: entry?.procedures ?? [],
+      };
+    }
+
+    return invokeNative("list_tables", { connectionId, database });
+  },
+
+  async columns(
+    connectionId: string,
+    database: string,
+    table: string,
+  ): Promise<{ columns: BridgeColumnInfo[] }> {
+    if (!isTauriDesktop()) {
+      return { columns: mapMockColumns(database, table) };
+    }
+
+    return invokeNative("list_columns", { connectionId, database, table });
+  },
+
+  async execute(connectionId: string, sql: string, tabId?: string): Promise<BridgeQueryResult> {
+    if (!isTauriDesktop()) {
+      return mockExecute(sql);
+    }
+
+    return invokeNative("execute_query", {
+      connectionId,
+      sql,
+      tabId: tabId ?? null,
     });
   },
-  async saveConnection(c: Connection) {
-    return call<{ connection: { id: string } }>("/connections/save", {
-      method: "POST",
-      body: JSON.stringify(connPayload(c)),
-    });
+
+  async history(connectionId?: string): Promise<{ history: QueryHistoryEntry[] }> {
+    if (!isTauriDesktop()) return { history: [] };
+    return invokeNative("list_query_history", { connectionId: connectionId ?? null });
   },
-  async connect(c: Connection): Promise<{ connectionId: string; name: string }> {
-    await this.saveConnection(c);
-    return call("/connections/connect", {
-      method: "POST",
-      body: JSON.stringify({ id: c.id }),
-    });
-  },
-  async disconnect(poolId: string) {
-    return call("/connections/disconnect", {
-      method: "POST",
-      body: JSON.stringify({ id: poolId }),
-    });
-  },
-  databases(poolId: string): Promise<{ databases: string[] }> {
-    return call(`/schemas?connectionId=${encodeURIComponent(poolId)}`);
-  },
-  tables(poolId: string, database: string): Promise<{ tables: BridgeTableInfo[]; procedures: string[] }> {
-    return call(`/tables?connectionId=${encodeURIComponent(poolId)}&database=${encodeURIComponent(database)}`);
-  },
-  columns(poolId: string, database: string, table: string): Promise<{ columns: BridgeColumnInfo[] }> {
-    return call(
-      `/tables/${encodeURIComponent(table)}/columns?connectionId=${encodeURIComponent(poolId)}&database=${encodeURIComponent(database)}`,
-    );
-  },
-  execute(poolId: string, sql: string, tabId?: string): Promise<BridgeQueryResult> {
-    return call("/query/execute", {
-      method: "POST",
-      body: JSON.stringify({ connectionId: poolId, sql, meta: tabId ? { tabId } : undefined }),
-    });
-  },
-  insertRow(poolId: string, database: string, table: string, values: Record<string, unknown>) {
-    return call<{ affected: number; insertId: number }>("/rows/insert", {
-      method: "POST",
-      body: JSON.stringify({ connectionId: poolId, database, table, values }),
-    });
-  },
-  updateRow(
-    poolId: string, database: string, table: string,
-    where: Record<string, unknown>, patch: Record<string, unknown>,
-  ) {
-    return call<{ affected: number }>("/rows/update", {
-      method: "POST",
-      body: JSON.stringify({ connectionId: poolId, database, table, where, patch }),
-    });
-  },
-  deleteRow(poolId: string, database: string, table: string, where: Record<string, unknown>) {
-    return call<{ affected: number }>("/rows/delete", {
-      method: "POST",
-      body: JSON.stringify({ connectionId: poolId, database, table, where }),
-    });
+
+  async exportResult(result: QueryResult, format: "csv" | "json", path?: string | null) {
+    if (!isTauriDesktop()) {
+      if (format === "json") {
+        downloadBrowserFile("results.json", JSON.stringify(result, null, 2), "application/json");
+        return;
+      }
+
+      const header = result.columns.map((column) => column.name).join(",");
+      const body = result.rows
+        .map((row) =>
+          row
+            .map((cell) =>
+              cell == null
+                ? ""
+                : `"${String(typeof cell === "object" ? JSON.stringify(cell) : cell).replace(/"/g, '""')}"`,
+            )
+            .join(","),
+        )
+        .join("\n");
+      downloadBrowserFile("results.csv", `${header}\n${body}`, "text/csv");
+      return;
+    }
+
+    await invokeNative("export_query_result", { result, format, path: path ?? null });
   },
 };
 
-/** Subscribe to bridge WebSocket events. Returns an unsubscribe function. */
-export function subscribeBridgeEvents(
-  onEvent: (evt: { type: string; payload: unknown; ts: number }) => void,
-): () => void {
-  if (typeof window === "undefined") return () => {};
-  const wsUrl = getBridgeUrl().replace(/^http/, "ws") + "/ws";
-  let socket: WebSocket | null = null;
-  let closed = false;
-  let retry = 0;
+export function subscribeBridgeEvents(onEvent: (evt: DesktopEvent) => void): () => void {
+  if (!isTauriDesktop()) return () => {};
 
-  const connect = () => {
-    if (closed) return;
-    try {
-      socket = new WebSocket(wsUrl);
-    } catch {
+  let disposed = false;
+  let unsubscribe: (() => void) | null = null;
+
+  void listen<DesktopEvent>("desktop://event", (event: { payload: DesktopEvent }) => {
+    onEvent(event.payload);
+  }).then((unlisten: () => void) => {
+    if (disposed) {
+      unlisten();
       return;
     }
-    socket.onmessage = (e) => {
-      try {
-        onEvent(JSON.parse(e.data as string));
-      } catch { /* ignore */ }
-    };
-    socket.onclose = () => {
-      if (closed) return;
-      retry = Math.min(retry + 1, 6);
-      setTimeout(connect, 500 * retry);
-    };
-    socket.onerror = () => socket?.close();
-  };
-  connect();
+
+    unsubscribe = unlisten;
+  });
 
   return () => {
-    closed = true;
-    socket?.close();
+    disposed = true;
+    unsubscribe?.();
   };
 }

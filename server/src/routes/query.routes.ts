@@ -20,17 +20,32 @@ queryRouter.post("/execute", validateBody(execSchema), async (req, res) => {
   broadcast("query.started", { id: qid, tabId: meta?.tabId, sql });
   try {
     const result = await execute(connectionId, sql);
-    broadcast("query.completed", { id: qid, durationMs: result.durationMs, rowCount: result.rowCount });
+    broadcast("query.completed", {
+      id: qid,
+      durationMs: result.durationMs,
+      rowCount: result.rowCount,
+    });
     await store.addHistory({
-      id: qid, connectionId, sql, ranAt: Date.now(),
-      durationMs: result.durationMs, rowCount: result.rowCount, ok: true,
+      id: qid,
+      connectionId,
+      sql,
+      ranAt: Date.now(),
+      durationMs: result.durationMs,
+      rowCount: result.rowCount,
+      ok: true,
     });
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Query failed";
     broadcast("query.failed", { id: qid, message });
     await store.addHistory({
-      id: qid, connectionId, sql, ranAt: Date.now(), durationMs: 0, rowCount: 0, ok: false,
+      id: qid,
+      connectionId,
+      sql,
+      ranAt: Date.now(),
+      durationMs: 0,
+      rowCount: 0,
+      ok: false,
     });
     throw err;
   }

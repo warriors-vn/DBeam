@@ -43,6 +43,5 @@ const server = createServer(app);
 attachWebSocket(server);
 
 server.listen(env.port, "127.0.0.1", () => {
-  // eslint-disable-next-line no-console
   console.log(`[bridge] listening on http://127.0.0.1:${env.port} (safe mode: ${env.safeMode})`);
 });

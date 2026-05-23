@@ -1,20 +1,43 @@
 import { useUI } from "@/stores/ui";
 import { useConnections } from "@/stores/connections";
-import { Database, PanelLeft, Plug, Search, Settings as Cog } from "lucide-react";
+import { Database, Minus, PanelLeft, Plug, Search, Settings as Cog, Square, X } from "lucide-react";
 import { BridgeStatus } from "./BridgeStatus";
+import { closeWindow, minimizeWindow, toggleMaximizeWindow } from "@/services/window";
+import { isTauriDesktop } from "@/services/bridge";
 
 export function TitleBar() {
   const { toggleSidebar, setPalette, setSettings, setConnections } = useUI();
   const { activeId, list } = useConnections();
   const active = list.find((c) => c.id === activeId);
+  const isDesktop = isTauriDesktop();
 
   return (
-    <div className="glass flex h-11 shrink-0 items-center gap-2 px-3 select-none">
-      {/* macOS traffic lights */}
+    <div
+      className="glass flex h-11 shrink-0 items-center gap-2 px-3 select-none"
+      data-tauri-drag-region={isDesktop ? "" : undefined}
+    >
       <div className="flex items-center gap-1.5 pr-2">
-        <span className="size-3 rounded-full bg-[oklch(0.65_0.22_25)]" />
-        <span className="size-3 rounded-full bg-[oklch(0.82_0.17_85)]" />
-        <span className="size-3 rounded-full bg-[oklch(0.72_0.18_145)]" />
+        <button
+          onClick={() => void closeWindow()}
+          className="flex size-3 items-center justify-center rounded-full bg-[oklch(0.65_0.22_25)]/90 text-transparent hover:text-black/45"
+          aria-label="Close window"
+        >
+          <X className="size-2" />
+        </button>
+        <button
+          onClick={() => void minimizeWindow()}
+          className="flex size-3 items-center justify-center rounded-full bg-[oklch(0.82_0.17_85)]/90 text-transparent hover:text-black/45"
+          aria-label="Minimize window"
+        >
+          <Minus className="size-2" />
+        </button>
+        <button
+          onClick={() => void toggleMaximizeWindow()}
+          className="flex size-3 items-center justify-center rounded-full bg-[oklch(0.72_0.18_145)]/90 text-transparent hover:text-black/45"
+          aria-label="Toggle maximize"
+        >
+          <Square className="size-1.5" />
+        </button>
       </div>
 
       <button
@@ -27,7 +50,7 @@ export function TitleBar() {
 
       <div className="flex items-center gap-2 text-xs font-medium tracking-tight">
         <Database className="size-3.5 text-primary" />
-        <span className="text-foreground">Tabletop</span>
+        <span className="text-foreground">DBeam</span>
         <span className="text-muted-foreground">/</span>
         <button
           onClick={() => setConnections(true)}
@@ -44,7 +67,7 @@ export function TitleBar() {
         className="glass-soft flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
       >
         <Search className="size-3.5" />
-        <span>Search tables, commands…</span>
+        <span>Search tables, commands, windows…</span>
         <span className="ml-6 flex items-center gap-1">
           <span className="kbd">⌘</span>
           <span className="kbd">K</span>

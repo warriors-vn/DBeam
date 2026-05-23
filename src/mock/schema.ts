@@ -1,4 +1,4 @@
-import type { Connection } from "@/lib/db/dexie";
+import type { ConnectionSummary } from "@/types/desktop";
 
 export interface MockColumn {
   name: string;
@@ -28,7 +28,12 @@ const t = (
 ): MockTable => ({ name, rows, kind, columns });
 
 const id = (): MockColumn => ({ name: "id", type: "bigint", nullable: false, pk: true });
-const ts = (name = "created_at"): MockColumn => ({ name, type: "timestamp", nullable: false, default: "CURRENT_TIMESTAMP" });
+const ts = (name = "created_at"): MockColumn => ({
+  name,
+  type: "timestamp",
+  nullable: false,
+  default: "CURRENT_TIMESTAMP",
+});
 
 export const mockDatabases: MockDatabase[] = [
   {
@@ -65,10 +70,15 @@ export const mockDatabases: MockDatabase[] = [
         { name: "user_agent", type: "text", nullable: true },
         ts("started_at"),
       ]),
-      t("v_active_users", 8120, [
-        { name: "user_id", type: "bigint", nullable: false },
-        { name: "last_seen", type: "timestamp", nullable: false },
-      ], "view"),
+      t(
+        "v_active_users",
+        8120,
+        [
+          { name: "user_id", type: "bigint", nullable: false },
+          { name: "last_seen", type: "timestamp", nullable: false },
+        ],
+        "view",
+      ),
     ],
   },
   {
@@ -91,7 +101,7 @@ export const mockDatabases: MockDatabase[] = [
   },
 ];
 
-export function databasesForConnection(_conn: Connection): MockDatabase[] {
+export function databasesForConnection(_conn: ConnectionSummary): MockDatabase[] {
   // For MVP every connection sees the same mock catalog
   return mockDatabases;
 }

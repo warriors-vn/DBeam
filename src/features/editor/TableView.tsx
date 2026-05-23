@@ -1,24 +1,36 @@
 import { useEffect } from "react";
 import { useTabs, type TableTab } from "@/stores/tabs";
-import { mockExecute } from "@/mock/execute";
 import { ResultsTable } from "@/features/results/ResultsTable";
-import { databasesForConnection, type MockColumn } from "@/mock/schema";
 import { useConnections } from "@/stores/connections";
 import { Columns3, Database, KeyRound, Link2, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { bridge, isTauriDesktop } from "@/services/bridge";
+import { useColumns } from "@/services/queries";
+import type { ColumnInfo } from "@/types/desktop";
+
+function quoteIdentifier(value: string) {
+  return "`" + value.replace(/`/g, "``") + "`";
+}
 
 export function TableView({ tab }: { tab: TableTab }) {
   const update = useTabs((s) => s.update);
-  const { activeId, list } = useConnections();
-  const conn = list.find((c) => c.id === activeId);
-  const dbs = conn ? databasesForConnection(conn) : [];
-  const meta = dbs.find((d) => d.name === tab.database)?.tables.find((t) => t.name === tab.table);
+  const activePoolId = useConnections((s) => s.activePoolId);
+  const columnsQuery = useColumns(activePoolId, tab.database, tab.table);
   const [view, setView] = useState<"data" | "structure">("data");
 
   const load = async () => {
+    if (isTauriDesktop() && !activePoolId) {
+      update(tab.id, { running: false, result: undefined });
+      return;
+    }
+
     update(tab.id, { running: true });
-    const result = await mockExecute(`SELECT * FROM ${tab.table} LIMIT 500`);
+    const result = await bridge.execute(
+      activePoolId ?? "preview",
+      `SELECT * FROM ${quoteIdentifier(tab.database)}.${quoteIdentifier(tab.table)} LIMIT 500`,
+      tab.id,
+    );
     update(tab.id, { running: false, result });
   };
 
@@ -34,9 +46,9 @@ export function TableView({ tab }: { tab: TableTab }) {
         <span className="text-muted-foreground">{tab.database}</span>
         <span className="text-muted-foreground">/</span>
         <span className="font-medium text-foreground">{tab.table}</span>
-        {meta && (
+        {tab.result && (
           <span className="text-muted-foreground">
-            · {meta.rows.toLocaleString()} rows
+            · {tab.result.rowCount.toLocaleString()} rows loaded
           </span>
         )}
         <div className="ml-4 flex items-center gap-0.5 rounded-md bg-white/5 p-0.5">
@@ -80,14 +92,14 @@ export function TableView({ tab }: { tab: TableTab }) {
             </div>
           )
         ) : (
-          <Structure columns={meta?.columns ?? []} />
+          <Structure columns={columnsQuery.data?.columns ?? []} />
         )}
       </div>
     </div>
   );
 }
 
-function Structure({ columns }: { columns: MockColumn[] }) {
+function Structure({ columns }: { columns: ColumnInfo[] }) {
   return (
     <div className="scrollbar-thin h-full overflow-auto p-4 text-xs">
       <div className="mb-3 flex items-center gap-2 text-muted-foreground">
@@ -113,9 +125,7 @@ function Structure({ columns }: { columns: MockColumn[] }) {
             </div>
             <div className="mono text-muted-foreground">{c.type}</div>
             <div className="text-muted-foreground">{c.nullable ? "YES" : "NO"}</div>
-            <div className="text-muted-foreground">
-              {c.pk ? "PRI" : c.fk ? "FK" : ""}
-            </div>
+            <div className="text-muted-foreground">{c.pk ? "PRI" : c.fk ? "FK" : ""}</div>
             <div className="text-muted-foreground">
               {c.fk ? `${c.fk.table}.${c.fk.column}` : (c.default ?? "")}
             </div>
